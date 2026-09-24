@@ -1,0 +1,83 @@
+
+ Voyager-Style Property Management Database Schema
+ Modeled on core real estate entities: Property, Unit, Tenant,
+ Lease, and GL Transaction
+
+
+1. PROPERTIES
+Top-level entity: one row per building/complex
+CREATE TABLE properties (
+    property_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_name   TEXT NOT NULL,
+    address         TEXT NOT NULL,
+    city            TEXT NOT NULL,
+    state           TEXT NOT NULL,
+    zip_code        TEXT NOT NULL,
+    property_type   TEXT NOT NULL CHECK (property_type IN ('Residential', 'Commercial', 'Mixed-Use')),
+    year_built      INTEGER,
+    total_units     INTEGER
+);
+
+2. UNITS
+Each unit belongs to exactly one property
+CREATE TABLE units (
+    unit_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id     INTEGER NOT NULL,
+    unit_number     TEXT NOT NULL,
+    unit_type       TEXT CHECK (unit_type IN ('Studio', '1BR', '2BR', '3BR', 'Office', 'Retail')),
+    square_feet     INTEGER,
+    bedrooms        INTEGER,
+    bathrooms       REAL,
+    market_rent     DECIMAL(10, 2) NOT NULL,   -- what the unit SHOULD rent for
+    status          TEXT CHECK (status IN ('Occupied', 'Vacant', 'Down')) DEFAULT 'Vacant',
+    FOREIGN KEY (property_id) REFERENCES properties(property_id)
+);
+
+ 3. TENANTS
+Renters, kept independent of any single lease
+CREATE TABLE tenants (
+    tenant_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name      TEXT NOT NULL,
+    last_name       TEXT NOT NULL,
+    email           TEXT,
+    phone           TEXT,
+    move_in_date    DATE
+);
+
+ 4. LEASES
+ Links a unit to a tenant for a period of time
+CREATE TABLE leases (
+    lease_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    unit_id         INTEGER NOT NULL,
+    tenant_id       INTEGER NOT NULL,
+    lease_start     DATE NOT NULL,
+    lease_end       DATE NOT NULL,
+    monthly_rent    DECIMAL(10, 2) NOT NULL,   -- actual rent being charged
+    security_deposit DECIMAL(10, 2),
+    lease_status    TEXT CHECK (lease_status IN ('Active', 'Expired', 'Pending', 'Terminated')) DEFAULT 'Active',
+    FOREIGN KEY (unit_id) REFERENCES units(unit_id),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+);
+
+5. GL_TRANSACTIONS
+Accounting layer: charges, payments, and expenses tied to a property
+CREATE TABLE gl_transactions (
+    transaction_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id      INTEGER NOT NULL,
+    lease_id         INTEGER,                  -- nullable: expenses may not tie to a lease
+    account_code     TEXT NOT NULL,             -- e.g. '4000-RENT', '5000-REPAIRS'
+    account_category TEXT CHECK (account_category IN ('Income', 'Expense')),
+    description      TEXT,
+    amount           DECIMAL(10, 2) NOT NULL,
+    transaction_date DATE NOT NULL,
+    FOREIGN KEY (property_id) REFERENCES properties(property_id),
+    FOREIGN KEY (lease_id) REFERENCES leases(lease_id)
+);
+
+
+Relationship summary:
+properties (1) --> (many) units
+units (1) --> (many) leases  [over time]
+tenants (1) --> (many) leases
+properties (1) --> (many) gl_transactions
+leases (1) --> (many) gl_transactions  [rent charges, fees]
